@@ -1,5 +1,5 @@
 #!/bin/bash
-#-q | --quiet	- >		suppress file deletion output
+#-q | --quiet	- >		suppress file deletion output, not logging
 #Compatible with Freedesktop.org (GTK) and KDE thumbnail standards
 
 thumbnail_cache_directory="$HOME/.cache/thumbnails"
@@ -22,7 +22,7 @@ shopt -s nullglob
 for size in fail normal large x-large xx-large ; do
 	thumbs=( "$thumbnail_cache_directory/$size"/*.png )
 	
-	#If there are no thumbnails in the directory, then skip to the next directory
+	#If there are no thumbnails in the directory then skip to the next directory
 	if [[ ${#thumbs[@]} -eq 0 ]]; then
 		continue
 	fi
@@ -44,19 +44,21 @@ for size in fail normal large x-large xx-large ; do
 			echo "[$(timestamp)] ERROR: Thumbnail ($thumb) metadata does not contain ThumbURI," | tee -a "$log_file"
 			continue
 		fi
-
-		#If ThumbURI does not begin with file:///, checks to see if it begins with "trash//" otherwise skip and log
+		#If ThumbURI does not begin with file://, checks to see if it begins with "trash://" or "mtp://" otherwise skips and logs the file
 		if [[ $uri != file://* ]]; then
 			if [[ $uri == trash://* ]]; then
 				echo "Deleting thumbnail for trash file: $uri"
 				echo "  -> thumbnail: $thumb"
-				rm -f -- "$thumb" && ((deleted++))		
+				rm -f -- "$thumb" && ((deleted++))
+			elif [[ $uri == mtp://* ]]; then
+				echo "Deleting thumbnail for Android file: $uri"
+				echo "  -> thumbnail: $thumb"
+				rm -f -- "$thumb" && ((deleted++))
 			else
-				echo "[$(timestamp)] ERROR: ThumbURI for $thumb is $uri and does not begin with 'file://' or 'trash://'," | tee -a "$log_file"
+				echo "[$(timestamp)] ERROR: ThumbURI for $thumb is $uri and does not begin with 'file://', 'trash://' or 'mtp://'," | tee -a "$log_file"
 			fi
 			continue	
-		fi
-						  
+		fi			  
 		#Removes the "file://" prefix
 		unix_path="${uri#file://}"	
 		#Replaces any "%" with "\x" which prepares the string for printf (%20 -> \x20)
@@ -75,7 +77,7 @@ for size in fail normal large x-large xx-large ; do
 			fi
 		fi
 	#Calling exiftool in batches ensures that the number of characters in a shell doesn't exceed the limit. Using a text file to feed exiftool the thumbnails overloads exiftool and results in *much* worse performance if processing tens of thousands of thumbnails.
-  #Calling exiftool for every file also results in much worse performance. 1000 per batch seems to be close for optimal performance
+	#Calling exiftool for every file also results in much worse performance. 1000 per batch seems to be close for optimal performance
 	#Exiftool needs to be called with its full path because cron only has a $PATH of /bin and /usr/bin
 	#Suppresses warning "Trailer data after PNG IEND chunk". This trailer data is used in another script to mark compressed pngs.
 	#For whatever dumb reason exiftool needs to be called with "-q -q" and not "-qq" to actually suppress the output.
